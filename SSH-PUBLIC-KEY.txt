@@ -1,0 +1,6 @@
+Thêm khóa SSH này vào GitHub để push được:
+https://github.com/settings/ssh/new
+
+Title: May tinh OOP_Xam_Lozz
+Key (copy toàn bộ 1 dòng bên dưới):
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKcc38EH5XZ6q4urcU393+IwInM1V2Q4axFSJWdWIrCu VieTruong-2007@github

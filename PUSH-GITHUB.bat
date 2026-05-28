@@ -52,17 +52,19 @@ if !errorlevel! equ 0 (
     "!GIT!" commit -m "Update: tro choi pha gach C++ (C.cpp, build scripts, theme)"
 )
 
+set "GIT_SSH_COMMAND=C:\Windows\System32\OpenSSH\ssh.exe -o StrictHostKeyChecking=accept-new"
 echo [5/5] git push -u origin main...
-"!GIT!" push -u origin main
+"!GIT!" -c core.sshCommand="C:/Windows/System32/OpenSSH/ssh.exe -o StrictHostKeyChecking=accept-new" push -u origin main
 set "RC=!errorlevel!"
 
 if !RC! neq 0 (
     echo.
     echo ============================================================
     echo  PUSH THAT BAI
-    echo  - Kiem tra da dang nhap SSH GitHub chua
-    echo  - Chay: ssh -T git@github.com
-    echo  - Hoac tao repo trong: https://github.com/VieTruong-2007/OOP_Xam_Lozz
+    echo  - Them SSH key vao GitHub (xem file SSH-PUBLIC-KEY.txt)
+    echo  - https://github.com/settings/ssh/new
+    echo  - Tao repo (neu chua co): https://github.com/new  ten: OOP_Xam_Lozz
+    echo  - Test: ssh -T git@github.com
     echo ============================================================
 ) else (
     echo.
