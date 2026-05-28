@@ -1,0 +1,28 @@
+# Theme setup file
+# Edit these values to change the visual look of the game.
+# The app can read this file later to apply colors and background settings.
+
+BACKGROUND_IMAGE=background_cache.jpg
+BACKGROUND_R=10
+BACKGROUND_G=20
+BACKGROUND_B=40
+
+BRICK_FILL_R=139
+BRICK_FILL_G=69
+BRICK_FILL_B=19
+
+BRICK_OUTLINE_R=92
+BRICK_OUTLINE_G=46
+BRICK_OUTLINE_B=12
+
+PADDLE_R=255
+PADDLE_G=210
+PADDLE_B=70
+
+BALL_R=255
+BALL_G=90
+BALL_B=90
+
+TEXT_R=255
+TEXT_G=255
+TEXT_B=255
