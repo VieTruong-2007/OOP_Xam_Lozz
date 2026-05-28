@@ -1,8 +1,13 @@
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <commdlg.h>
 #include <gdiplus.h>
 #include <vector>
 #include <cstring>
+#include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <string>
 #include <cctype>
@@ -15,13 +20,25 @@ const int WINDOW_W = 800;
 const int WINDOW_H = 500;
 const int PADDLE_W = 140;
 const int PADDLE_H = 18;
-const int BALL_R = 10;
-const int BRICK_W = 40;
-const int BRICK_H = 14;
+const int BALL_R = 7;
+const int BRICK_W = 18;
+const int BRICK_H = 18;
+const int BRICK_ROWS = 20;
+const int BRICK_COLS = 25;
+const int BRICK_SPACING_X = 5;
+const int BRICK_SPACING_Y = 5;
+const int BRICK_LEFT_OFFSET = 20;
+const int BRICK_TOP_OFFSET = 20;
+const int STAR_RADIUS = 8;
+const float STAR_FALL_SPEED = 3.0f;
+const int STARS_TO_WIN = 10;
+const int STAR_SPAWN_CHANCE_PERCENT = 5;
+const int STAR_SPAWN_THRESHOLD = (BRICK_ROWS * BRICK_COLS * 2 + 2) / 3;
 
 struct Brick {
     RECT rc;
     bool alive;
+    bool breakable;
 };
 
 struct Ball {
@@ -31,11 +48,19 @@ struct Ball {
     int vy;
 };
 
+struct Star {
+    float x;
+    float y;
+    bool active;
+};
+
 struct GameState {
     int paddleX;
     int score;
+    int starsCollected;
     bool running;
     vector<Brick> bricks;
+    vector<Star> stars;
     Ball ball;
 };
 
@@ -65,6 +90,30 @@ static std::string Trim(const std::string& s) {
 static bool FileExists(const std::string& path) {
     DWORD attr = GetFileAttributesA(path.c_str());
     return attr != INVALID_FILE_ATTRIBUTES;
+}
+
+static int ClampInt(int value, int minVal, int maxVal) {
+    if (value < minVal) return minVal;
+    if (value > maxVal) return maxVal;
+    return value;
+}
+
+static void SpawnStar(int x, int y) {
+    Star star;
+    star.x = static_cast<float>(x);
+    star.y = static_cast<float>(y);
+    star.active = true;
+    g.stars.push_back(star);
+}
+
+static void SpawnRandomBrick() {
+    std::vector<int> deadIndices;
+    for (int i = 0; i < static_cast<int>(g.bricks.size()); ++i) {
+        if (!g.bricks[i].alive) deadIndices.push_back(i);
+    }
+    if (deadIndices.empty()) return;
+    int chosenIndex = deadIndices[rand() % deadIndices.size()];
+    g.bricks[chosenIndex].alive = true;
 }
 
 static bool SaveThemeSetting(const std::string& key, const std::string& value) {
@@ -161,12 +210,16 @@ bool LoadThemeFromFile(const std::string& path) {
 bool LoadBackgroundImage(HWND hwnd) {
     if (!gTheme.backgroundImage.empty() && gTheme.backgroundImage != "default") {
         std::string candidate = gTheme.backgroundImage;
-        if (!FileExists(candidate)) candidate = "background_cache.jpg";
         if (FileExists(candidate)) {
             std::wstring wpath(candidate.begin(), candidate.end());
             delete gBackground;
-            gBackground = new Bitmap(wpath.c_str());
-            return gBackground->GetLastStatus() == Ok;
+            Image* image = Image::FromFile(wpath.c_str(), FALSE);
+            if (!image || image->GetLastStatus() != Ok) {
+                delete image;
+                return false;
+            }
+            gBackground = static_cast<Bitmap*>(image);
+            return true;
         }
     }
 
@@ -179,16 +232,22 @@ bool LoadBackgroundImage(HWND hwnd) {
             SaveThemeSetting("BACKGROUND_IMAGE", cacheName);
             std::wstring cachePath(cacheName.begin(), cacheName.end());
             delete gBackground;
-            gBackground = new Bitmap(cachePath.c_str());
-            return gBackground->GetLastStatus() == Ok;
+            Image* image = Image::FromFile(cachePath.c_str(), FALSE);
+            if (!image || image->GetLastStatus() != Ok) {
+                delete image;
+                return false;
+            }
+            gBackground = static_cast<Bitmap*>(image);
+            return true;
         }
     }
 
     OPENFILENAMEW ofn = {};
     WCHAR filePath[MAX_PATH] = L"";
+    static const wchar_t filter[] = L"Image Files\0*.bmp;*.jpg;*.jpeg;*.png;*.gif\0All Files\0*.*\0";
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = hwnd;
-    ofn.lpstrFilter = L"Image Files\0*.bmp;*.jpg;*.jpeg;*.png;*.gif\0All Files\0*.*\0";
+    ofn.lpstrFilter = filter;
     ofn.lpstrFile = filePath;
     ofn.nMaxFile = MAX_PATH;
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
@@ -206,24 +265,34 @@ bool LoadBackgroundImage(HWND hwnd) {
 
     std::wstring cachePath(cacheName.begin(), cacheName.end());
     delete gBackground;
-    gBackground = new Bitmap(cachePath.c_str());
-    return gBackground->GetLastStatus() == Ok;
+    Image* image = Image::FromFile(cachePath.c_str(), FALSE);
+    if (!image || image->GetLastStatus() != Ok) {
+        delete image;
+        return false;
+    }
+    gBackground = static_cast<Bitmap*>(image);
+    return true;
 }
 
 void InitGame() {
     g.paddleX = (WINDOW_W - PADDLE_W) / 2;
     g.score = 0;
+    g.starsCollected = 0;
     g.running = true;
     g.bricks.clear();
+    g.stars.clear();
 
-    for (int r = 0; r < 10; ++r) {
-        for (int c = 0; c < 10; ++c) {
+    int totalRows = BRICK_ROWS + 2;
+    int totalCols = BRICK_COLS + 2;
+    for (int r = 0; r < totalRows; ++r) {
+        for (int c = 0; c < totalCols; ++c) {
             Brick b;
-            b.rc.left = 18 + c * 76;
-            b.rc.top = 24 + r * 18;
+            b.rc.left = BRICK_LEFT_OFFSET + c * (BRICK_W + BRICK_SPACING_X);
+            b.rc.top = BRICK_TOP_OFFSET + r * (BRICK_H + BRICK_SPACING_Y);
             b.rc.right = b.rc.left + BRICK_W;
             b.rc.bottom = b.rc.top + BRICK_H;
             b.alive = true;
+            b.breakable = (r > 0 && r < totalRows - 1 && c > 0 && c < totalCols - 1);
             g.bricks.push_back(b);
         }
     }
@@ -232,8 +301,15 @@ void InitGame() {
 }
 
 void DrawBrick(HDC hdc, const Brick& brick) {
-    HBRUSH fill = CreateSolidBrush(RGB(gTheme.brickFillR, gTheme.brickFillG, gTheme.brickFillB));
-    HBRUSH outline = CreateSolidBrush(RGB(gTheme.brickOutlineR, gTheme.brickOutlineG, gTheme.brickOutlineB));
+    HBRUSH fill;
+    HBRUSH outline;
+    if (!brick.breakable) {
+        fill = CreateSolidBrush(RGB(180, 180, 180));
+        outline = CreateSolidBrush(RGB(100, 100, 100));
+    } else {
+        fill = CreateSolidBrush(RGB(gTheme.brickFillR, gTheme.brickFillG, gTheme.brickFillB));
+        outline = CreateSolidBrush(RGB(gTheme.brickOutlineR, gTheme.brickOutlineG, gTheme.brickOutlineB));
+    }
     FillRect(hdc, &brick.rc, fill);
     FrameRect(hdc, &brick.rc, outline);
     DeleteObject(fill);
@@ -267,8 +343,17 @@ void UpdateGame() {
     g.ball.x += g.ball.vx;
     g.ball.y += g.ball.vy;
 
-    if (g.ball.x <= BALL_R || g.ball.x >= WINDOW_W - BALL_R) g.ball.vx = -g.ball.vx;
-    if (g.ball.y <= BALL_R) g.ball.vy = -g.ball.vy;
+    if (g.ball.x <= BALL_R) {
+        g.ball.x = BALL_R;
+        g.ball.vx = abs(g.ball.vx);
+    } else if (g.ball.x >= WINDOW_W - BALL_R) {
+        g.ball.x = WINDOW_W - BALL_R;
+        g.ball.vx = -abs(g.ball.vx);
+    }
+    if (g.ball.y <= BALL_R) {
+        g.ball.y = BALL_R;
+        g.ball.vy = abs(g.ball.vy);
+    }
 
     if (g.ball.y >= WINDOW_H - 40) {
         g.running = false;
@@ -279,22 +364,85 @@ void UpdateGame() {
     if (g.ball.y + BALL_R >= paddle.top && g.ball.y - BALL_R <= paddle.bottom &&
         g.ball.x >= paddle.left && g.ball.x <= paddle.right) {
         g.ball.vy = -abs(g.ball.vy);
+        g.ball.y = paddle.top - BALL_R;
         if (g.ball.x < paddle.left + PADDLE_W / 2) g.ball.vx = -abs(g.ball.vx);
         else g.ball.vx = abs(g.ball.vx);
+        if (g.ball.vx == 0) g.ball.vx = (rand() % 2 == 0) ? 5 : -5;
     }
 
     for (auto& brick : g.bricks) {
-        if (!brick.alive) continue;
-        if (g.ball.x >= brick.rc.left && g.ball.x <= brick.rc.right &&
-            g.ball.y >= brick.rc.top && g.ball.y <= brick.rc.bottom) {
-            brick.alive = false;
-            g.score++;
-            g.ball.vy = -g.ball.vy;
-            break;
+            if (!brick.alive) continue;
+
+            int nearestX = ClampInt(g.ball.x, brick.rc.left, brick.rc.right);
+            int nearestY = ClampInt(g.ball.y, brick.rc.top, brick.rc.bottom);
+
+            int dx = g.ball.x - nearestX;
+            int dy = g.ball.y - nearestY;
+
+            if (dx * dx + dy * dy <= BALL_R * BALL_R) {
+                bool hitBreakable = brick.breakable;
+                if (hitBreakable) {
+                    brick.alive = false;
+                    g.score++;
+                }
+
+                int spawnThreshold = STAR_SPAWN_THRESHOLD;
+                if (hitBreakable && g.score >= spawnThreshold) {
+                    if (rand() % 100 < STAR_SPAWN_CHANCE_PERCENT) {
+                        SpawnStar((brick.rc.left + brick.rc.right) / 2, brick.rc.bottom);
+                    }
+                }
+
+                if (dx == 0 && dy == 0) {
+                    g.ball.vx = -g.ball.vx;
+                    g.ball.vy = -g.ball.vy;
+                    g.ball.x += g.ball.vx;
+                    g.ball.y += g.ball.vy;
+                } else if (abs(dx) > abs(dy)) {
+                    g.ball.vx = -g.ball.vx;
+                    if (dx > 0) g.ball.x = brick.rc.right + BALL_R;
+                    else g.ball.x = brick.rc.left - BALL_R;
+                } else {
+                    g.ball.vy = -g.ball.vy;
+                    if (dy > 0) g.ball.y = brick.rc.bottom + BALL_R;
+                    else g.ball.y = brick.rc.top - BALL_R;
+                }
+
+                if (hitBreakable && g.score >= spawnThreshold) {
+                    SpawnRandomBrick();
+                }
+                break;
+            }
+        }
+    for (auto& star : g.stars) {
+        if (!star.active) continue;
+        star.y += STAR_FALL_SPEED;
+
+        RECT paddle = { g.paddleX, WINDOW_H - 50, g.paddleX + PADDLE_W, WINDOW_H - 50 + PADDLE_H };
+        if (star.y + STAR_RADIUS >= paddle.top && star.y - STAR_RADIUS <= paddle.bottom &&
+            star.x >= paddle.left && star.x <= paddle.right) {
+            star.active = false;
+            g.starsCollected++;
+            if (g.starsCollected >= STARS_TO_WIN) {
+                g.running = false;
+            }
+        }
+
+        if (star.y - STAR_RADIUS > WINDOW_H) {
+            star.active = false;
         }
     }
 
-    if (g.score == static_cast<int>(g.bricks.size())) g.running = false;
+    bool anyAlive = false;
+    for (const auto& brick : g.bricks) {
+        if (brick.alive) {
+            anyAlive = true;
+            break;
+        }
+    }
+    if (!anyAlive && g.starsCollected < STARS_TO_WIN) {
+        g.running = false;
+    }
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -335,11 +483,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
             SetBkMode(memDC, TRANSPARENT);
             SetTextColor(memDC, RGB(gTheme.textR, gTheme.textG, gTheme.textB));
-            TextOutA(memDC, 20, 15, "Tro choi pha gach", 16);
+            TextOutA(memDC, 20, 15, "Tro choi pha gach", -1);
 
             char scoreText[64];
             sprintf_s(scoreText, sizeof(scoreText), "Diem: %d", g.score);
             TextOutA(memDC, 20, 35, scoreText, (int)strlen(scoreText));
+
+            char starText[64];
+            sprintf_s(starText, sizeof(starText), "Sao: %d/%d", g.starsCollected, STARS_TO_WIN);
+            TextOutA(memDC, 20, 55, starText, (int)strlen(starText));
 
             for (const auto& brick : g.bricks) {
                 if (brick.alive) DrawBrick(memDC, brick);
@@ -347,11 +499,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             DrawPaddle(memDC);
             DrawBall(memDC);
 
+            HBRUSH starBrush = CreateSolidBrush(RGB(255, 215, 0));
+            HBRUSH oldBrush = (HBRUSH)SelectObject(memDC, starBrush);
+            for (const auto& star : g.stars) {
+                if (!star.active) continue;
+                Ellipse(memDC,
+                        static_cast<int>(star.x) - STAR_RADIUS,
+                        static_cast<int>(star.y) - STAR_RADIUS,
+                        static_cast<int>(star.x) + STAR_RADIUS,
+                        static_cast<int>(star.y) + STAR_RADIUS);
+            }
+            SelectObject(memDC, oldBrush);
+            DeleteObject(starBrush);
+
             if (!g.running) {
-                RECT msgRc = { WINDOW_W / 2 - 120, WINDOW_H / 2 - 20, WINDOW_W / 2 + 120, WINDOW_H / 2 + 20 };
-                DrawTextA(memDC,
-                          g.score == static_cast<int>(g.bricks.size()) ? "Chuc mung! Ban da pha het gach!" : "Game over!",
-                          -1, &msgRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                RECT msgRc = { WINDOW_W / 2 - 160, WINDOW_H / 2 - 20, WINDOW_W / 2 + 160, WINDOW_H / 2 + 20 };
+                const char* msg = g.starsCollected >= STARS_TO_WIN ? "Chuc mung! Ban da thang!" : "Game over!";
+                DrawTextA(memDC, msg, -1, &msgRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
             }
 
             BitBlt(hdc, 0, 0, WINDOW_W, WINDOW_H, memDC, 0, 0, SRCCOPY);
@@ -377,6 +541,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, int) {
+    srand(static_cast<unsigned>(time(nullptr)));
     GdiplusStartupInput gdiplusStartupInput;
     GdiplusStartup(&gGdiplusToken, &gdiplusStartupInput, nullptr);
 
