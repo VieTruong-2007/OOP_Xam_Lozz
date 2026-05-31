@@ -1,6 +1,5 @@
-# Theme setup file
+# Theme file (colors + background). App reads this first; theme.txt is optional fallback.
 # Edit these values to change the visual look of the game.
-# The app can read this file later to apply colors and background settings.
 
 BACKGROUND_IMAGE=background_cache.jpg
 BACKGROUND_R=10

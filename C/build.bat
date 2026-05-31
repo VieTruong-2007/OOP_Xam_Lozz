@@ -6,7 +6,7 @@ REM  build.bat  -  Auto build C.cpp -> C.exe
 REM
 REM  Usage:
 REM    build.bat              Build C.cpp -> C.exe
-REM    build.bat watch        Auto-rebuild when C.cpp changes
+REM    build.bat watch        Auto-rebuild when C.cpp is saved (~0.4s)
 REM    build.bat run          Build then launch C.exe
 REM    build.bat watch run    Watch + rebuild + restart game
 REM    build.bat install      Install free C++ compiler (LLVM MinGW via winget)
@@ -42,29 +42,12 @@ if "%DO_RUN%"=="1" if !RC! equ 0 call :launch_exe
 exit /b !RC!
 
 :watch_mode
-echo.
-echo ============================================================================
-echo  Auto-build ON: watching C.cpp  (Ctrl+C to stop)
-echo  Compiler: !COMPILER_NAME!  ^(!COMPILER_CMD!^)
-echo ============================================================================
-echo.
-
-set "LAST_STAMP="
-:watch_loop
-call :get_cpp_stamp STAMP
-if not "!STAMP!"=="!LAST_STAMP!" (
-    set "LAST_STAMP=!STAMP!"
-    call :compile_cpp
-    if !errorlevel! equ 0 (
-        echo [OK] C.exe updated.
-        if "%DO_RUN%"=="1" call :launch_exe
-    ) else (
-        echo [FAIL] Fix C.cpp and save again.
-    )
-    echo.
+if "%DO_RUN%"=="1" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0watch_build.ps1" run
+) else (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0watch_build.ps1"
 )
-timeout /t 1 /nobreak >nul
-goto :watch_loop
+exit /b !errorlevel!
 
 REM ---------------------------------------------------------------------------
 :do_install
