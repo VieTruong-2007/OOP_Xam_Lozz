@@ -1,0 +1,11 @@
+*.obj
+*.pdb
+*.ilk
+*.exp
+vc140.pdb
+C.exe
+C.obj
+__pycache__/
+.idea/
+.vscode/
+*.log

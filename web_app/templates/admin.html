@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin — Upload</title>
+    <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body class="bg-dark text-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-secondary">
+      <div class="container-fluid">
+        <a class="navbar-brand d-flex align-items-center gap-2" href="/">
+          <img src="/static/logo.svg" width="32" height="32" alt="Brick Game logo">
+          <span>Brick Game</span>
+        </a>
+        <div class="d-flex">
+          <a class="btn btn-outline-light" href="/">Downloads</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container py-5">
+      <div class="row justify-content-center">
+        <div class="col-lg-7">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              {% for cat, msg in messages %}
+                <div class="alert alert-{{ 'success' if cat=='success' else 'danger' }}">{{ msg }}</div>
+              {% endfor %}
+            {% endif %}
+          {% endwith %}
+
+          <div class="card card-admin border-0 shadow-sm">
+            <div class="card-body">
+              <h1 class="card-title mb-3">Quản trị tải game</h1>
+              <p class="text-muted">Đăng nhập với mật khẩu admin để tải lên phiên bản mới hoặc quản lý file.</p>
+              <p class="text-muted small mb-0">Cho phép các file .zip , .exe , .msi , .txt , .md. Dung lượng tối đa phụ thuộc vào cấu hình máy chủ.</p>
+
+              {% if admin %}
+                <form method="post" enctype="multipart/form-data" class="mb-4">
+                  <div class="row g-3">
+                    <div class="col-12">
+                      <label class="form-label">Chọn file</label>
+                      <input class="form-control" type="file" name="file" required>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Ghi chú bản phát hành</label>
+                      <textarea class="form-control" name="notes" rows="3" placeholder="Nhập mô tả ngắn cho bản phát hành..."></textarea>
+                    </div>
+                    <div class="col-12 d-flex flex-wrap gap-2">
+                      <button class="btn btn-primary" name="upload">Tải lên</button>
+                      <a class="btn btn-outline-secondary" href="/logout">Đăng xuất</a>
+                    </div>
+                  </div>
+                </form>
+
+                <div class="mt-4">
+                  <h5 class="mb-3">Danh sách file</h5>
+                  {% if files %}
+                    <div class="list-group list-group-flush">
+                      {% for file in files %}
+                      <div class="list-group-item bg-dark border-light rounded-4 mb-2 p-3">
+                        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                          <div>
+                            <h6 class="mb-1">{{ file.name }}</h6>
+                            <p class="text-muted mb-1">{{ file.notes }}</p>
+                            <small class="text-muted">{{ file.uploaded_at }} · {{ file.size_text }}</small>
+                          </div>
+                          <form method="post" action="/delete/{{ file.name }}" class="mb-0">
+                            <button class="btn btn-sm btn-outline-danger" type="submit">Xóa</button>
+                          </form>
+                        </div>
+                      </div>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <div class="alert alert-info">Chưa có file nào trong thư mục uploads.</div>
+                  {% endif %}
+                </div>
+              {% else %}
+                <form method="post">
+                  <div class="mb-3">
+                    <label class="form-label">Mật khẩu quản trị</label>
+                    <input class="form-control" type="password" name="password" placeholder="Nhập mật khẩu admin">
+                  </div>
+                  <button class="btn btn-primary" name="login">Đăng nhập</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="mt-4 text-center text-muted small">
+            <p>Để bảo mật, hãy đặt biến môi trường <code>WEB_ADMIN_PASSWORD</code> và <code>FLASK_SECRET_KEY</code>.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

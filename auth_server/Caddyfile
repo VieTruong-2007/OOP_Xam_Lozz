@@ -1,0 +1,6 @@
+# Example Caddyfile to reverse-proxy to the Flask auth server on localhost:5000
+# Replace example.com with your domain and ensure DNS points to this machine.
+
+example.com {
+    reverse_proxy localhost:5000
+}

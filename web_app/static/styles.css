@@ -1,0 +1,19 @@
+body{font-family:Segoe UI,Roboto,Arial,sans-serif;background-image:url('/assets/background_cache.jpg');background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed;color:#eef2ff;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background:rgba(4,10,20,.76);pointer-events:none;z-index:-1}
+.navbar{background:rgba(15,23,42,.95)!important;backdrop-filter:blur(14px)}
+.navbar-brand{font-weight:700;letter-spacing:.05em}
+.hero{background:rgba(8,15,31,.85);border:1px solid rgba(255,255,255,.12);position:relative;overflow:hidden;backdrop-filter:blur(12px)}
+.hero-badge{position:absolute;top:24px;right:24px;background:rgba(255,255,255,.12);color:#fff;padding:.45rem .9rem;border-radius:999px;font-weight:700;text-transform:uppercase;font-size:.8rem;letter-spacing:.08em}
+.feature-card, .card-guide, .card-faq, .card-admin, .list-group-item, .card-release{background:rgba(15,23,36,.82);border:1px solid rgba(148,163,184,.14);backdrop-filter:blur(12px)}
+.card-release{border:1px solid rgba(148,163,184,.2)}
+.card-release .card-body{padding:1.6rem}
+.feature-card h5{color:#fff}
+.install-card{background:rgba(59,130,246,.16);border:1px solid rgba(59,130,246,.3)}
+.footer{background:rgba(15,23,34,.95);border-top:1px solid rgba(148,163,184,.18)}
+.badge.bg-gradient{background:linear-gradient(135deg,#38bdf8,#3b82f6)}
+.btn-outline-light{color:#f8fafc;border-color:rgba(248,250,252,.6)}
+.btn-outline-light:hover{color:#fff;background:rgba(255,255,255,.08)}
+.alert{border-radius:1rem}
+.card-admin .form-control, .card-admin .form-label{color:#e2e8f0}
+.card-admin .form-control{background:rgba(15,23,36,.78);border:1px solid rgba(226,232,240,.12)}
+@media (max-width:767px){.hero{padding:2rem}.hero-badge{position:static;display:inline-block;margin-bottom:1rem}}
